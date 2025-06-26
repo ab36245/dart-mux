@@ -26,51 +26,67 @@ class MuxClient {
     _readers[id] = reader;
     return MuxChannel(id, reader.stream, _output.sink);
   }
-  
-  final _readers = <int, StreamController<Uint8List>>{};
+
+  var _closing = false;
 
   final _output = StreamController<Uint8List>();
+  
+  final _readers = <int, StreamController<Uint8List>>{};
 
   final WebSocket _ws;
 
   void _init() async {
-    _read();
-    _write();
+    _doInput();
+    _doOutput();
   }
 
-  void _read() async {
-    print('Client: reading input');
-    await for (final bytes in _ws.stream) {
-      print('Client: input ${bytes.length} bytes');
-      int id;
-      Uint8List rest;
-      try {
-        (id, rest) = readNumber(bytes);
-      } catch (e) {
-        print('Client: invalid channel id: $e');
+  void _doInput() async {
+    final m = 'Client._doInput';
+    print('$m: starting');
+    await for (final msg in _ws.stream) {
+      print('$m: read message ${msg.runtimeType}');
+      if (msg is! Uint8List) {
+        print('$m: can\'t handler ${m.runtimeType} msgs');
         break;
       }
-      print('Client: channel id $id');
-      print('Client: bytes remaining ${rest.length}');
+      print('$m: read binary message ${msg.length} bytes');
+      print('$m: reading channel id');
+      int id;
+      Uint8List bytes;
+      try {
+        (id, bytes) = readNumber(msg);
+      } catch (e) {
+        print('$m: invalid channel id: $e');
+        break;
+      }
+      print('$m: channel id $id');
+      print('$m: bytes remaining ${bytes.length}');
       if (id == 0) {
-        print('Client: control channel');
+        print('$m: control channel');
+        print('$m: ignoring control channel at the moment...');
       } else if (_readers.containsKey(id)) {
-        print('Client: reader channel');
-        _readers[id]!.sink.add(rest);
+        print('$m: reader channel');
+        _readers[id]!.sink.add(bytes);
       } else {
-        print('Client: invalid channel');
+        print('$m: invalid channel');
         break;
       }
     }
-    print('Client: shuttng down connection');
+    print('$m: shutting down connection');
+    _closing = true;
+    for (final entry in _readers.entries) {
+      print('$m: closing channel ${entry.key} reader');
+      await entry.value.close();
+    }
   }
 
-  void _write() async {
-    print('Client: reading output');
+  void _doOutput() async {
+    final m = 'Client._doOutput';
+    print('$m: starting');
     await for (final bytes in _output.stream) {
-      print('Client: output ${bytes.length} bytes');
+      print('$m: output ${bytes.length} bytes');
       _ws.writeBinary(bytes);
     }
-    print('Client: output stream is closed');
+    print('$m: output stream is closed');
   }
 }
