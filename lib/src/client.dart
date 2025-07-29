@@ -6,6 +6,11 @@ import 'package:dart_websocket/dart_websocket.dart';
 import 'channel.dart';
 import 'util.dart';
 
+const controlChannelId = 0; // Must agree with server
+
+const cmOpenChannel = 1;    // Must agree with server
+const cmCloseChannel = 2;   // Must agree with server
+
 class MuxClient {
   MuxClient(this._ws) {
     _init();
@@ -16,8 +21,8 @@ class MuxClient {
       throw 'invalid channel id $id';
     }
     final pkt = BytesBuilder();
-    pkt.addByte(0); // control channel id
-    pkt.addByte(0); // add channel id command
+    pkt.addByte(controlChannelId);
+    pkt.addByte(cmOpenChannel);
     pkt.add(writeNumber(id));
     final bytes = pkt.takeBytes();
     _ws.writeBinary(bytes);
